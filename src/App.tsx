@@ -110,7 +110,7 @@ export default function App() {
         <div className="bg-gradient-to-r from-brand-50 to-slate-50 border-b border-slate-100">
           <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2 text-sm text-brand-700">
             <Sparkles className="w-4 h-4 shrink-0" />
-            <span>Votre devoir sera corrigé par IA à partir du sujet et du corrigé de référence.</span>
+            <span>Votre devoir sera corrigé à partir du sujet et du corrigé de référence.</span>
           </div>
         </div>
       )}
@@ -125,7 +125,7 @@ export default function App() {
 
       <footer className="border-t border-slate-200 mt-12">
         <div className="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-slate-400">
-          CorrectIA — Correction de devoirs de mathématiques assistée par IA
+          CorrectDM — Correction de devoirs de mathématiques
         </div>
       </footer>
     </div>
