@@ -1,0 +1,2 @@
+[functions.analyze-homework]
+verify_jwt = false

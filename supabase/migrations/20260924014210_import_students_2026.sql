@@ -1,0 +1,41 @@
+-- Remove old test students and import the real class list
+DELETE FROM students WHERE name IN ('Alice Bernard', 'Thomas Chen', 'Marine Dubois', 'Lucas Martin', 'Emma Petit');
+
+INSERT INTO students (name, pin_hash) VALUES
+  ('ANGLIONIN Emma', extensions.crypt('5657', extensions.gen_salt('bf'))),
+  ('BOURON--CORDÉMY Adam', extensions.crypt('1602', extensions.gen_salt('bf'))),
+  ('ELMIN Lucas', extensions.crypt('0707', extensions.gen_salt('bf'))),
+  ('GABELUS Sara', extensions.crypt('1105', extensions.gen_salt('bf'))),
+  ('GUO Yannick', extensions.crypt('2008', extensions.gen_salt('bf'))),
+  ('HONORÉ Thibault', extensions.crypt('4571', extensions.gen_salt('bf'))),
+  ('JOSEPH-PAULINE Maïly', extensions.crypt('0208', extensions.gen_salt('bf'))),
+  ('LAGIER Hissaya', extensions.crypt('2906', extensions.gen_salt('bf'))),
+  ('LALANDE--BRELEUR Emmanuel', extensions.crypt('7770', extensions.gen_salt('bf'))),
+  ('LAUPIES Matys', extensions.crypt('1209', extensions.gen_salt('bf'))),
+  ('LOFARGNE Maël', extensions.crypt('0411', extensions.gen_salt('bf'))),
+  ('MAGGI—JOSEPH-AGATHE Théo', extensions.crypt('2120', extensions.gen_salt('bf'))),
+  ('MALESPINE Noah', extensions.crypt('1111', extensions.gen_salt('bf'))),
+  ('MARCELIN Matthias', extensions.crypt('2610', extensions.gen_salt('bf'))),
+  ('MASPIMBY--LOUISON Sarah', extensions.crypt('2810', extensions.gen_salt('bf'))),
+  ('MATHIEU-LEONARD Nathan', extensions.crypt('0112', extensions.gen_salt('bf'))),
+  ('MÉLOIS Loïs', extensions.crypt('0410', extensions.gen_salt('bf'))),
+  ('MENIL Gabrielle', extensions.crypt('0907', extensions.gen_salt('bf'))),
+  ('MINAR Lyann', extensions.crypt('0503', extensions.gen_salt('bf'))),
+  ('MONCONTHOUR Uriel', extensions.crypt('3526', extensions.gen_salt('bf'))),
+  ('MONTAY Keryan', extensions.crypt('8129', extensions.gen_salt('bf'))),
+  ('NANNETTE Thomas', extensions.crypt('2259', extensions.gen_salt('bf'))),
+  ('NARCISSOT Yohan', extensions.crypt('6094', extensions.gen_salt('bf'))),
+  ('POTOR Kaelyann', extensions.crypt('0116', extensions.gen_salt('bf'))),
+  ('ROSA-ARSENE Axel', extensions.crypt('1508', extensions.gen_salt('bf'))),
+  ('SAID HAMIDOUNI Ahmar', extensions.crypt('8624', extensions.gen_salt('bf'))),
+  ('SAINT-HONORÉ Pierrick', extensions.crypt('1473', extensions.gen_salt('bf'))),
+  ('SYLVESTRE Noah', extensions.crypt('0708', extensions.gen_salt('bf'))),
+  ('TÉNÉBAY Solène', extensions.crypt('3112', extensions.gen_salt('bf'))),
+  ('THIANT AUGUSTINE Kyliann', extensions.crypt('0000', extensions.gen_salt('bf'))),
+  ('VASSILIERE Alexia', extensions.crypt('1819', extensions.gen_salt('bf'))),
+  ('VASSILIERE Mathis', extensions.crypt('2605', extensions.gen_salt('bf'))),
+  ('VÉRIDIQUE-JÉRÔME Raphaël', extensions.crypt('1789', extensions.gen_salt('bf'))),
+  ('VILLAGE Derek', extensions.crypt('1001', extensions.gen_salt('bf'))),
+  ('WILCHES CALMO Samuel', extensions.crypt('1506', extensions.gen_salt('bf')))
+ON CONFLICT (name) DO UPDATE
+SET pin_hash = EXCLUDED.pin_hash;
