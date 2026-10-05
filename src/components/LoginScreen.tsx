@@ -110,7 +110,7 @@ export function LoginScreen({ onAuth }: LoginScreenProps) {
               <GraduationCap className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900">
-              Correct<span className="text-brand-600">IA</span>
+              Correct<span className="text-brand-600">DM</span>
             </h1>
             <p className="text-sm text-slate-500 mt-1">Pré-correction de devoirs de mathématiques — MPSI</p>
           </div>
