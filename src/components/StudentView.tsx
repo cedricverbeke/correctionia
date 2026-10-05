@@ -59,6 +59,24 @@ export function StudentView({ auth }: StudentViewProps) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  const [seenSubmissionIds, setSeenSubmissionIds] = useState<Set<string>>(new Set());
+  // Load submissions on mount so we can show a badge for newly corrected assignments
+  useEffect(() => {
+    if (!auth.studentId) return;
+    fetchStudentSubmissions(auth.studentId).then(setSubmissions).catch(() => {});
+  }, [auth.studentId]);
+
+  // Mark corrected submissions as seen once the student opens the corrections page
+  const markCorrectionsSeen = () => {
+    const corrected = new Set(submissions.filter((s) => s.validation_status === 'valide' || s.validation_status === 'modifie').map((s) => s.id));
+    setSeenSubmissionIds(corrected);
+  };
+
+  const newCorrectionCount = submissions.filter(
+    (s) =>
+      (s.validation_status === 'valide' || s.validation_status === 'modifie') &&
+      !seenSubmissionIds.has(s.id)
+  ).length;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,9 +111,13 @@ export function StudentView({ auth }: StudentViewProps) {
     }
   }, [submissions]);
 
+  // Track the latest submission so we can detect when it gets corrected on the success screen
+  const [latestSubmissionId, setLatestSubmissionId] = useState<string | null>(null);
+  const [correctionReady, setCorrectionReady] = useState(false);
+
   // Poll submissions every 10s so the student sees the AI result without manual refresh.
   useEffect(() => {
-    if (view !== 'success' && view !== 'corrections' && view !== 'correction_detail') return;
+    if (view !== 'success' && view !== 'corrections' && view !== 'correction_detail' && view !== 'list') return;
     if (!auth.studentId) return;
     const studentId = auth.studentId;
     const interval = setInterval(() => {
@@ -105,6 +127,15 @@ export function StudentView({ auth }: StudentViewProps) {
     }, 10000);
     return () => clearInterval(interval);
   }, [view, auth.studentId]);
+
+  // Detect when the latest submission becomes corrected while on the success screen
+  useEffect(() => {
+    if (view !== 'success' || !latestSubmissionId) return;
+    const latest = submissions.find((s) => s.id === latestSubmissionId);
+    if (latest && latest.ai_status === 'analyzed') {
+      setCorrectionReady(true);
+    }
+  }, [submissions, view, latestSubmissionId]);
 
   const addFiles = useCallback((newFiles: File[] | null) => {
     if (!newFiles || newFiles.length === 0) return;
@@ -215,6 +246,8 @@ export function StudentView({ auth }: StudentViewProps) {
         fileName
       ).catch(() => {});
 
+      setLatestSubmissionId(data.id);
+      setCorrectionReady(false);
       setView('success');
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Une erreur est survenue.');
@@ -227,29 +260,54 @@ export function StudentView({ auth }: StudentViewProps) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12 animate-slide-up">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center">
-          <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5">
-            <CheckCircle2 className="w-9 h-9 text-emerald-500" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">
-            Votre devoir a bien été transmis
-          </h2>
-          <p className="text-slate-500 mb-6">
-            Il est en cours d'analyse par l'IA. Votre enseignant recevra la pré-correction
-            automatiquement.
-          </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-brand-600 mb-6">
-            <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse-soft" />
-            <span>Analyse IA en cours…</span>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 justify-center">
-            <Button variant="secondary" onClick={resetForm}>
-              Déposer un autre devoir
-            </Button>
-            <Button variant="primary" onClick={() => { loadSubmissions(); setView('corrections'); }}>
-              <Eye className="w-4 h-4" />
-              Voir mes corrections
-            </Button>
-          </div>
+          {correctionReady ? (
+            <>
+              <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5">
+                <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2">
+                Votre devoir a été corrigé
+              </h2>
+              <p className="text-slate-500 mb-6">
+                L'IA a terminé l'analyse de votre copie. Consultez votre note et la correction détaillée.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <Button variant="secondary" onClick={resetForm}>
+                  Déposer un autre devoir
+                </Button>
+                <Button variant="primary" onClick={() => { loadSubmissions(); setView('corrections'); }}>
+                  <Eye className="w-4 h-4" />
+                  Voir ma correction
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5">
+                <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2">
+                Votre devoir a bien été déposé
+              </h2>
+              <p className="text-slate-500 mb-6">
+                Votre copie a été transmise avec succès. Elle est maintenant en cours de
+                correction par l'IA — vous serez prévenu ici même dès que la correction sera prête.
+              </p>
+              <div className="flex items-center justify-center gap-2 text-sm text-brand-600 mb-6">
+                <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse-soft" />
+                <span>Correction en cours…</span>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <Button variant="primary" onClick={resetForm}>
+                  Déposer un autre devoir
+                </Button>
+                <Button variant="secondary" onClick={() => { loadSubmissions(); setView('corrections'); }}>
+                  <Eye className="w-4 h-4" />
+                  Voir mes corrections
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -736,8 +794,8 @@ export function StudentView({ auth }: StudentViewProps) {
 
       {/* Quick access to corrections */}
       <button
-        onClick={() => { loadSubmissions(); setView('corrections'); }}
-        className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-brand-50 to-amber-50/30 rounded-2xl border border-brand-100 hover:border-brand-200 hover:shadow-sm transition-all text-left mb-6 group"
+        onClick={() => { loadSubmissions(); markCorrectionsSeen(); setView('corrections'); }}
+        className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-brand-50 to-amber-50/30 rounded-2xl border border-brand-100 hover:border-brand-200 hover:shadow-sm transition-all text-left mb-6 group relative"
       >
         <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-sm">
           <Sparkles className="w-5 h-5 text-brand-600" />
@@ -746,6 +804,11 @@ export function StudentView({ auth }: StudentViewProps) {
           <p className="font-semibold text-slate-900">Mes corrections</p>
           <p className="text-sm text-slate-500">Consulter mes notes et corrections détaillées</p>
         </div>
+        {newCorrectionCount > 0 && (
+          <span className="absolute top-3 right-3 min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse-soft">
+            {newCorrectionCount}
+          </span>
+        )}
         <ChevronRight className="w-5 h-5 text-brand-400 group-hover:text-brand-600 transition-colors shrink-0" />
       </button>
 
