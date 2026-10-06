@@ -137,7 +137,18 @@ Deno.serve(async (req: Request) => {
       contextParts.push(`COPIE DE L'ÉLÈVE (texte):\n${textAnswer}`);
     }
     if (fileUrl && fileName) {
-      contextParts.push(`FICHIER JOINT PAR L'ÉLÈVE: ${fileName}`);
+      // Check if fileName is a JSON array of multiple files
+      let isMultiFile = false;
+      try {
+        const parsed = JSON.parse(fileName);
+        if (Array.isArray(parsed)) {
+          isMultiFile = true;
+          contextParts.push(`FICHIERS JOINTS PAR L'ÉLÈVE (${parsed.length} fichiers):`);
+        }
+      } catch {
+        // not JSON, single file
+        contextParts.push(`FICHIER JOINT PAR L'ÉLÈVE: ${fileName}`);
+      }
     }
 
     if (!geminiKey) {
@@ -219,22 +230,34 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Include student's file (PDF, image, or try as text)
+    // Include student's file(s) — PDF, image, or try as text
     if (fileUrl) {
-      const isImage = fileType?.startsWith("image/");
-      const isPdf = fileType === "application/pdf" || fileUrl.toLowerCase().endsWith(".pdf");
+      // Check if multiple files were uploaded (stored as JSON in fileName)
+      let allFiles: { url: string; type: string; name: string }[] = [];
+      try {
+        const parsed = JSON.parse(fileName || "");
+        if (Array.isArray(parsed)) {
+          allFiles = parsed.map((f: { url: string; type: string; name: string }) => ({ url: f.url, type: f.type, name: f.name }));
+        }
+      } catch {
+        // Single file
+        allFiles = [{ url: fileUrl, type: fileType || "", name: fileName || "" }];
+      }
 
-      if (isImage || isPdf) {
-        const fetched = await fetchAsBase64(fileUrl);
-        if (fetched) {
-          const type = fetched.mimeType.split(";")[0].trim();
-          // Gemini accepts image/* and application/pdf
-          if (type.startsWith("image/") || type === "application/pdf") {
-            parts.push({ inline_data: { mime_type: type, data: fetched.data } });
-          } else {
-            // Fallback: use detected type based on fileType
-            const fallbackType = isImage ? "image/png" : "application/pdf";
-            parts.push({ inline_data: { mime_type: fallbackType, data: fetched.data } });
+      for (const f of allFiles) {
+        const isImage = f.type?.startsWith("image/");
+        const isPdf = f.type === "application/pdf" || f.url.toLowerCase().endsWith(".pdf");
+
+        if (isImage || isPdf) {
+          const fetched = await fetchAsBase64(f.url);
+          if (fetched) {
+            const type = fetched.mimeType.split(";")[0].trim();
+            if (type.startsWith("image/") || type === "application/pdf") {
+              parts.push({ inline_data: { mime_type: type, data: fetched.data } });
+            } else {
+              const fallbackType = isImage ? "image/png" : "application/pdf";
+              parts.push({ inline_data: { mime_type: fallbackType, data: fetched.data } });
+            }
           }
         }
       }

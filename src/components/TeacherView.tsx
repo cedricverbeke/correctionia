@@ -22,6 +22,8 @@ import {
   Sparkles,
   RefreshCw,
   Keyboard,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -29,6 +31,19 @@ import { ValidationBadge, AiStatusBadge } from '@/components/ui/Badges';
 import { fetchSubmissions, updateSubmission, deleteSubmission, deleteAllSubmissions, triggerAnalysis, fetchGeminiModel, updateGeminiModel } from '@/lib/api';
 import { ManualAnalysisModal } from '@/components/ManualAnalysisModal';
 import type { Submission, ValidationStatus } from '@/types';
+
+function getAttachedFiles(sub: Submission): { name: string; url: string }[] {
+  if (!sub.file_url) return [];
+  try {
+    const parsed = JSON.parse(sub.file_name || '');
+    if (Array.isArray(parsed)) {
+      return parsed.map((f: { name: string; url: string }) => ({ name: f.name, url: f.url }));
+    }
+  } catch {
+    // not JSON, single file
+  }
+  return [{ name: sub.file_name || 'Fichier', url: sub.file_url }];
+}
 
 export function TeacherDashboard() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -50,6 +65,7 @@ export function TeacherDashboard() {
   const [bulkAnalyzing, setBulkAnalyzing] = useState(false);
   const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
   const [manualSub, setManualSub] = useState<Submission | null>(null);
+  const [viewingFiles, setViewingFiles] = useState<Submission | null>(null);
   const [geminiModel, setGeminiModel] = useState('gemini-3.5-flash-lite');
   const [modelSaving, setModelSaving] = useState(false);
   const [modelMsg, setModelMsg] = useState<string | null>(null);
@@ -405,12 +421,29 @@ export function TeacherDashboard() {
                     </td>
                     <td className="px-4 py-3">
                       {sub.file_url ? (
-                        <a href={sub.file_url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-brand-600 hover:text-brand-700 font-medium">
-                          {sub.file_type?.startsWith('image/') ? <ImageIcon className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
-                          <span className="text-xs underline">Voir</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
+                        (() => {
+                          const files = getAttachedFiles(sub);
+                          const allImages = files.every((f) => f.url.match(/\.(jpg|jpeg|png|gif|webp|bmp)/i));
+                          if (!allImages) {
+                            return (
+                              <a href={files[0].url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-brand-600 hover:text-brand-700 font-medium">
+                                <FileText className="w-4 h-4" />
+                                <span className="text-xs underline">Voir{files.length > 1 ? ` (${files.length})` : ''}</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            );
+                          }
+                          return (
+                            <button
+                              onClick={() => setViewingFiles(sub)}
+                              className="inline-flex items-center gap-1.5 text-brand-600 hover:text-brand-700 font-medium"
+                            >
+                              <ImageIcon className="w-4 h-4" />
+                              <span className="text-xs underline">Voir{files.length > 1 ? ` (${files.length})` : ''}</span>
+                            </button>
+                          );
+                        })()
                       ) : sub.text_answer ? (
                         <span className="text-xs text-slate-400 italic">Texte saisi</span>
                       ) : (
@@ -524,10 +557,45 @@ export function TeacherDashboard() {
             </div>
 
             {editing.file_url && (
-              <a href={editing.file_url} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-brand-600 hover:text-brand-700 font-medium">
-                <Eye className="w-4 h-4" /> Voir la copie de l&apos;élève
-              </a>
+              (() => {
+                const files = getAttachedFiles(editing);
+                const imageFiles = files.filter((f) => f.url.match(/\.(jpg|jpeg|png|gif|webp|bmp)/i));
+                const otherFiles = files.filter((f) => !f.url.match(/\.(jpg|jpeg|png|gif|webp|bmp)/i));
+                return (
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                      <Eye className="w-4 h-4" /> {files.length > 1 ? `Copie de l'élève (${files.length} fichiers)` : 'Copie de l\'élève'}
+                    </div>
+                    {imageFiles.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                        {imageFiles.map((f, i) => (
+                          <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"
+                            className="group relative rounded-xl overflow-hidden border border-slate-200 hover:border-brand-300 hover:shadow-md transition-all">
+                            <img src={f.url} alt={`Page ${i + 1}`} className="w-full h-32 object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-end p-2">
+                              <span className="text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity font-medium">
+                                Page {i + 1}
+                              </span>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {otherFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {otherFiles.map((f, i) => (
+                          <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-brand-600 hover:text-brand-700 hover:border-brand-300 transition-all">
+                            <FileText className="w-4 h-4" />
+                            <span className="underline">Ouvrir le fichier</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
             )}
 
             <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-100">
@@ -549,6 +617,127 @@ export function TeacherDashboard() {
         submission={manualSub}
         onSaved={load}
       />
+
+      {/* File Viewer Modal */}
+      <Modal
+        open={!!viewingFiles}
+        onClose={() => setViewingFiles(null)}
+        title={viewingFiles ? `Copie de ${viewingFiles.student_name}` : ''}
+        maxWidth="max-w-4xl"
+      >
+        {viewingFiles && (
+          <FileViewer submission={viewingFiles} />
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function FileViewer({ submission }: { submission: Submission }) {
+  const files = getAttachedFiles(submission);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  if (files.length === 0) {
+    return <p className="text-sm text-slate-400 text-center py-8">Aucun fichier.</p>;
+  }
+
+  const current = files[currentIndex];
+  const isImage = current.url.match(/\.(jpg|jpeg|png|gif|webp|bmp)/i) !== null;
+  const isPdf = current.url.match(/\.pdf$/i) !== null;
+
+  return (
+    <div className="space-y-4">
+      {/* Image preview */}
+      {isImage && (
+        <div className="flex justify-center bg-slate-50 rounded-xl p-4 min-h-[300px]">
+          <img
+            src={current.url}
+            alt={`Page ${currentIndex + 1}`}
+            className="max-h-[60vh] object-contain rounded-lg"
+          />
+        </div>
+      )}
+
+      {/* PDF: open in new tab directly */}
+      {isPdf && (
+        <div className="flex flex-col items-center justify-center text-slate-400 py-12 bg-slate-50 rounded-xl">
+          <FileText className="w-12 h-12 mb-3" />
+          <p className="text-sm mb-3">Fichier PDF — ouvrez-le dans un nouvel onglet.</p>
+          <a href={current.url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors">
+            <ExternalLink className="w-4 h-4" /> Ouvrir le PDF
+          </a>
+        </div>
+      )}
+
+      {/* Other non-image files */}
+      {!isImage && !isPdf && (
+        <div className="flex flex-col items-center justify-center text-slate-400 py-12 bg-slate-50 rounded-xl">
+          <FileText className="w-12 h-12 mb-3" />
+          <p className="text-sm mb-3">Ce fichier n'est pas une image.</p>
+          <a href={current.url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors">
+            <Download className="w-4 h-4" /> Télécharger / Ouvrir
+          </a>
+        </div>
+      )}
+
+      {/* Navigation */}
+      {files.length > 1 && (
+        <div className="flex items-center justify-between gap-4">
+          <button
+            onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+            disabled={currentIndex === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-brand-300 hover:text-brand-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-4 h-4" /> Précédent
+          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Thumbnails */}
+            <div className="flex gap-2">
+              {files.map((f, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentIndex(i)}
+                  className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                    i === currentIndex
+                      ? 'border-brand-500 ring-2 ring-brand-500/20'
+                      : 'border-slate-200 hover:border-brand-300'
+                  }`}
+                >
+                  {f.url.match(/\.(jpg|jpeg|png|gif|webp|bmp)/i) ? (
+                    <img src={f.url} alt={`Page ${i + 1}`} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <span className="text-sm text-slate-500 font-medium whitespace-nowrap">
+              {currentIndex + 1} / {files.length}
+            </span>
+          </div>
+
+          <button
+            onClick={() => setCurrentIndex((i) => Math.min(files.length - 1, i + 1))}
+            disabled={currentIndex === files.length - 1}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-brand-300 hover:text-brand-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Suivant <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Download current file */}
+      <div className="flex justify-center pt-2 border-t border-slate-100">
+        <a href={current.url} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors">
+          <Download className="w-4 h-4" /> {files.length > 1 ? `Télécharger la page ${currentIndex + 1}` : 'Télécharger le fichier'}
+        </a>
+      </div>
     </div>
   );
 }

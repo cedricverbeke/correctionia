@@ -16,6 +16,19 @@ import { fetchAssignmentById } from '@/lib/api';
 import { updateSubmission } from '@/lib/api';
 import type { Submission, Assignment } from '@/types';
 
+function getAttachedFiles(sub: Submission): { name: string; url: string }[] {
+  if (!sub.file_url) return [];
+  try {
+    const parsed = JSON.parse(sub.file_name || '');
+    if (Array.isArray(parsed)) {
+      return parsed.map((f: { name: string; url: string }) => ({ name: f.name, url: f.url }));
+    }
+  } catch {
+    // not JSON, single file
+  }
+  return [{ name: sub.file_name || 'Fichier', url: sub.file_url }];
+}
+
 const SYSTEM_PROMPT = `Tu es un professeur de mathématiques en classe préparatoire MPSI, bienveillant et rigoureux.
 On te fournit :
 1. L'énoncé du devoir (sujet).
@@ -130,9 +143,19 @@ export function ManualAnalysisModal({ open, onClose, submission, onSaved }: Manu
     }
 
     if (submission.file_url) {
-      parts.push(`FICHIER JOINT PAR L'ÉLÈVE: ${submission.file_name || 'fichier'}`);
-      parts.push(`(Téléchargez le fichier ci-dessous et joignez-le à votre prompt Gemini)`);
-      parts.push(`Lien: ${submission.file_url}`);
+      const files = getAttachedFiles(submission);
+      if (files.length > 1) {
+        parts.push(`FICHIERS JOINTS PAR L'ÉLÈVE (${files.length} fichiers):`);
+        files.forEach((f, i) => {
+          parts.push(`  Fichier ${i + 1}: ${f.name}`);
+          parts.push(`  Lien: ${f.url}`);
+        });
+        parts.push(`(Téléchargez TOUS les fichiers ci-dessus et joignez-les à votre prompt Gemini)`);
+      } else {
+        parts.push(`FICHIER JOINT PAR L'ÉLÈVE: ${submission.file_name || 'fichier'}`);
+        parts.push(`(Téléchargez le fichier ci-dessous et joignez-le à votre prompt Gemini)`);
+        parts.push(`Lien: ${submission.file_url}`);
+      }
       parts.push('');
     }
 
@@ -223,22 +246,35 @@ export function ManualAnalysisModal({ open, onClose, submission, onSaved }: Manu
         )}
 
         {/* File link */}
-        {submission.file_url && (
-          <a
-            href={submission.file_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
-          >
-            {submission.file_type?.startsWith('image/') ? (
-              <ImageIcon className="w-4 h-4" />
-            ) : (
-              <FileText className="w-4 h-4" />
-            )}
-            Voir / télécharger la copie de l'élève
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        )}
+        {submission.file_url && (() => {
+          const files = getAttachedFiles(submission);
+          return (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                {submission.file_type?.startsWith('image/') ? (
+                  <ImageIcon className="w-4 h-4" />
+                ) : (
+                  <FileText className="w-4 h-4" />
+                )}
+                {files.length > 1 ? `Copie de l'élève (${files.length} fichiers)` : 'Copie de l\'élève'}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {files.map((f, i) => (
+                  <a
+                    key={i}
+                    href={f.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-brand-600 hover:text-brand-700 hover:border-brand-300 transition-all"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    {files.length > 1 ? `Fichier ${i + 1}` : 'Voir / télécharger'}
+                  </a>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Step 1: Copy prompt */}
         <div className="space-y-2">
