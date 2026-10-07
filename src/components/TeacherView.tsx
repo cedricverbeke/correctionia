@@ -28,7 +28,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ValidationBadge, AiStatusBadge } from '@/components/ui/Badges';
-import { fetchSubmissions, updateSubmission, deleteSubmission, deleteAllSubmissions, triggerAnalysis, fetchGeminiModel, updateGeminiModel } from '@/lib/api';
+import { fetchSubmissions, updateSubmission, deleteSubmission, deleteSubmissions, deleteAllSubmissions, triggerAnalysis, fetchGeminiModel, updateGeminiModel } from '@/lib/api';
 import { ManualAnalysisModal } from '@/components/ManualAnalysisModal';
 import type { Submission, ValidationStatus } from '@/types';
 
@@ -66,6 +66,10 @@ export function TeacherDashboard() {
   const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
   const [manualSub, setManualSub] = useState<Submission | null>(null);
   const [viewingFiles, setViewingFiles] = useState<Submission | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
   const [geminiModel, setGeminiModel] = useState('gemini-3.5-flash-lite');
   const [modelSaving, setModelSaving] = useState(false);
   const [modelMsg, setModelMsg] = useState<string | null>(null);
@@ -155,6 +159,88 @@ export function TeacherDashboard() {
       // ignore
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((s) => s.id)));
+    }
+  };
+
+  const sanitizeFileName = (name: string): string => {
+    return name.replace(/[^a-zA-Z0-9àâäéèêëïîôöùûüÿçÀÂÄÉÈÊËÏÎÔÖÙÛÜŸÇ _-]/g, '_').trim();
+  };
+
+  const handleBulkDownload = async () => {
+    const selected = filtered.filter((s) => selectedIds.has(s.id) && s.file_url);
+    if (selected.length === 0) {
+      setBulkMsg('Aucun fichier à télécharger parmi les lignes sélectionnées.');
+      setTimeout(() => setBulkMsg(null), 4000);
+      return;
+    }
+    setBulkDownloading(true);
+    setBulkMsg(`Téléchargement de ${selected.length} copie(s)…`);
+    let ok = 0;
+    let fail = 0;
+    for (const sub of selected) {
+      const files = getAttachedFiles(sub);
+      for (let fi = 0; fi < files.length; fi++) {
+        const f = files[fi];
+        try {
+          const resp = await fetch(f.url);
+          if (!resp.ok) throw new Error('fetch failed');
+          const blob = await resp.blob();
+          const ext = f.name.split('.').pop()?.toLowerCase() || f.url.match(/\.(\w+)(\?|$)/)?.[1]?.toLowerCase() || 'bin';
+          const baseName = `${sanitizeFileName(sub.exercise_title)}_${sanitizeFileName(sub.student_name)}`;
+          const fileName = files.length > 1 ? `${baseName}_p${fi + 1}.${ext}` : `${baseName}.${ext}`;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          URL.revokeObjectURL(url);
+          await new Promise((r) => setTimeout(r, 300));
+        } catch {
+          fail++;
+        }
+      }
+      ok++;
+    }
+    setBulkDownloading(false);
+    const msg = fail > 0
+      ? `${ok} copie(s) téléchargée(s), ${fail} fichier(s) en échec.`
+      : `${ok} copie(s) téléchargée(s) avec succès.`;
+    setBulkMsg(msg);
+    setTimeout(() => setBulkMsg(null), 5000);
+  };
+
+  const handleBulkDelete = async () => {
+    const selected = filtered.filter((s) => selectedIds.has(s.id));
+    if (selected.length === 0) return;
+    if (!confirm(`Supprimer ${selected.length} soumission(s) sélectionnée(s) ? Cette action est irréversible et supprimera aussi les fichiers.`)) return;
+    setBulkDeleting(true);
+    try {
+      await deleteSubmissions(selected.map((s) => s.id));
+      setSelectedIds(new Set());
+      load();
+      setBulkMsg(`${selected.length} soumission(s) supprimée(s).`);
+      setTimeout(() => setBulkMsg(null), 4000);
+    } catch {
+      setBulkMsg('Erreur lors de la suppression.');
+      setTimeout(() => setBulkMsg(null), 4000);
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -366,15 +452,51 @@ export function TeacherDashboard() {
       )}
 
       {submissions.length > 0 && (
-        <div className="flex justify-end mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <>
+                <span className="text-sm text-slate-500 font-medium">{selectedIds.size} sélectionné(s)</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleBulkDownload}
+                  loading={bulkDownloading}
+                >
+                  <Download className="w-4 h-4" /> Télécharger
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  loading={bulkDeleting}
+                  className="!text-red-600 hover:!bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4" /> Supprimer
+                </Button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Annuler
+                </button>
+              </>
+            )}
+          </div>
           <button
             onClick={handlePurgeAll}
             disabled={purging}
-            className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 disabled:text-slate-300 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 disabled:text-slate-300 transition-colors self-end"
           >
             {purging ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             Purger toutes les soumissions
           </button>
+        </div>
+      )}
+
+      {bulkMsg && (
+        <div className="mb-4 p-3 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 text-sm animate-slide-down">
+          {bulkMsg}
         </div>
       )}
 
@@ -396,6 +518,14 @@ export function TeacherDashboard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/20 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-4 py-3 whitespace-nowrap">Date</th>
                   <th className="px-4 py-3 whitespace-nowrap">Élève</th>
                   <th className="px-4 py-3 whitespace-nowrap">Devoir</th>
@@ -407,7 +537,15 @@ export function TeacherDashboard() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((sub) => (
-                  <tr key={sub.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={sub.id} className={`hover:bg-slate-50/50 transition-colors ${selectedIds.has(sub.id) ? 'bg-brand-50/40' : ''}`}>
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(sub.id)}
+                        onChange={() => toggleSelect(sub.id)}
+                        className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/20 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-slate-500 text-xs">
                       {new Date(sub.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
                       <br />

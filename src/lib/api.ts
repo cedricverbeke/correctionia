@@ -143,6 +143,12 @@ export async function deleteSubmission(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function deleteSubmissions(ids: string[]): Promise<void> {
+  for (const id of ids) {
+    await deleteSubmission(id);
+  }
+}
+
 export async function deleteAllSubmissions(): Promise<void> {
   const { data: subs } = await supabase
     .from('submissions')
