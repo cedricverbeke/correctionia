@@ -32,7 +32,7 @@ import { supabase, triggerAnalysis } from '@/lib/supabase';
 import { fetchAssignments, uploadHomeworkFile, fetchStudentSubmissions } from '@/lib/api';
 import type { Assignment, Submission, AuthState } from '@/types';
 
-const ACCEPTED_TYPES = '.pdf,image/*,.txt,.tex';
+const ACCEPTED_TYPES = '.pdf,image/*,.txt,.tex,.py';
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 type View = 'list' | 'submit' | 'success' | 'corrections' | 'correction_detail';
@@ -657,7 +657,7 @@ export function StudentView({ auth }: StudentViewProps) {
           {/* File upload */}
           <div>
             <label className="text-sm font-semibold text-slate-700 mb-2 block">
-              Fichier(s) joint(s) — PDF, images, texte, LaTeX
+              Fichier(s) joint(s) — PDF, images, texte, LaTeX, Python (.py)
             </label>
 
             {/* Already selected files */}
@@ -706,7 +706,7 @@ export function StudentView({ auth }: StudentViewProps) {
               <p className="text-sm text-slate-600 font-medium mb-1">
                 Glissez des fichiers ici ou choisissez une option
               </p>
-              <p className="text-xs text-slate-400 mb-4">PDF, images, TXT, .tex — 10 Mo max par fichier</p>
+              <p className="text-xs text-slate-400 mb-4">PDF, images, TXT, .tex, .py — 10 Mo max par fichier</p>
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                 <button
                   type="button"

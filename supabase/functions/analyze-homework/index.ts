@@ -33,6 +33,16 @@ interface RequestBody {
   fileName?: string | null;
 }
 
+async function fetchAsText(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  }
+}
+
 async function fetchAsBase64(url: string): Promise<{ data: string; mimeType: string } | null> {
   try {
     const response = await fetch(url);
@@ -247,8 +257,14 @@ Deno.serve(async (req: Request) => {
       for (const f of allFiles) {
         const isImage = f.type?.startsWith("image/");
         const isPdf = f.type === "application/pdf" || f.url.toLowerCase().endsWith(".pdf");
+        const isPy = f.name?.toLowerCase().endsWith(".py") || f.url.toLowerCase().endsWith(".py");
 
-        if (isImage || isPdf) {
+        if (isPy) {
+          const codeText = await fetchAsText(f.url);
+          if (codeText) {
+            parts.push({ text: `[CODE PYTHON — ${f.name}]\n\`\`\`python\n${codeText}\n\`\`\`` });
+          }
+        } else if (isImage || isPdf) {
           const fetched = await fetchAsBase64(f.url);
           if (fetched) {
             const type = fetched.mimeType.split(";")[0].trim();
